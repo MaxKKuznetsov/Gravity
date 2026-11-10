@@ -111,3 +111,36 @@ export const METEOR_COLOR = '#8a7f72';
 export const METEOR_EDGE_COLOR = '#c9bba8';
 // Взрыв метеорита о планету: радиус кольца в долях радиуса метеорита
 export const METEOR_EXPLOSION_SCALE = 2.2;
+
+// Стрельба
+// Пушка: скорость выстрела относительно корабля, пикс/с. Снаряд к ней ещё
+// добавляет скорость самого корабля. Меньше второй космической у
+// поверхности (≈ 410), поэтому в поле планеты траектория заметно гнётся
+export const CANNON_MUZZLE_SPEED = 320;
+// Перезарядка пушки, с: при зажатой ЛКМ — 5 выстрелов в секунду
+export const CANNON_RELOAD_TIME = 0.2;
+// Сколько секунд живёт снаряд, если ни во что не попал
+export const BULLET_LIFETIME = 2.5;
+// Радиус снаряда для столкновений и отрисовки, пикс
+export const BULLET_RADIUS = 2.5;
+export const BULLET_COLOR = '#fff3c4';
+export const BULLET_TRAIL_COLOR = 'rgba(255, 179, 71, 0.6)';
+// Хвост снаряда: длина в секундах полёта (рисуем отрезок назад по скорости)
+export const BULLET_TRAIL_SECONDS = 0.025;
+// Вспышка, когда снаряд попадает в планету
+export const BULLET_IMPACT_RADIUS = 10;
+
+// Дробление метеорита при попадании
+// На сколько осколков раскалывается метеорит (случайно, включительно)
+export const METEOR_FRAGMENTS_MIN = 2;
+export const METEOR_FRAGMENTS_MAX = 3;
+// Осколки легче этого рассыпаются в пыль и исчезают
+export const METEOR_FRAGMENT_MIN_MASS = 1;
+// С какой скоростью осколки разлетаются друг от друга (относительно центра
+// масс), пикс/с
+export const METEOR_FRAGMENT_SPEED = 45;
+// Неравномерность масс: доля каждого осколка умножается на случайное число
+// из [1 − k, 1 + k], потом доли нормируются на 1
+export const METEOR_FRAGMENT_MASS_SPREAD = 0.4;
+// Вспышка при попадании: радиус кольца в долях радиуса метеорита
+export const METEOR_HIT_EXPLOSION_SCALE = 1.4;

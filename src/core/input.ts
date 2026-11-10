@@ -55,6 +55,7 @@ export class InputState {
   releaseAll(): void {
     this.down.clear();
     this.mouseDown = false;
+    this.clicks = 0;
   }
 
   isDown(code: string): boolean {
@@ -71,7 +72,7 @@ export class InputState {
     return this.pressedThisFrame.has(code);
   }
 
-  // Сколько раз нажали ЛКМ с прошлого вызова endFrame
+  // Сколько раз нажали ЛКМ с прошлого вызова consumeClicks
   get clickCount(): number {
     return this.clicks;
   }
@@ -92,14 +93,23 @@ export class InputState {
     return {
       turn,
       thrust: this.isDown(KEY_THRUST),
-      fire: this.mouseDown,
+      // Короткий клик (тап по тачпаду) может начаться и закончиться между
+      // двумя кадрами, и кнопка уже будет отпущена. Поэтому клик за этот
+      // кадр тоже считается командой «стрелять»
+      fire: this.mouseDown || this.clicks > 0,
       aimScreen: this.mouse,
     };
   }
 
-  // Вызывается в конце кадра: сбрасывает одноразовые события
+  // Вызывается в конце кадра: сбрасывает одноразовые нажатия клавиш
   endFrame(): void {
     this.pressedThisFrame.clear();
+  }
+
+  // Вызывается после шага физики, который прочитал controls(): клики уже
+  // учтены. Отдельно от endFrame, потому что в кадре может не быть ни
+  // одного шага физики, и тогда клик не должен пропасть
+  consumeClicks(): void {
     this.clicks = 0;
   }
 }

@@ -38,8 +38,20 @@ describe('InputState', () => {
     input.mouseButton(true);
     expect(input.clickCount).toBe(2);
     expect(input.controls().fire).toBe(true);
-    input.endFrame();
+    input.consumeClicks();
     expect(input.clickCount).toBe(0);
+  });
+
+  it('короткий клик между кадрами тоже даёт команду выстрела', () => {
+    const input = new InputState();
+    input.mouseButton(true);
+    input.mouseButton(false);
+    expect(input.isMouseDown).toBe(false);
+    // Кадр без шагов физики: клик не пропадает
+    input.endFrame();
+    expect(input.controls().fire).toBe(true);
+    input.consumeClicks();
+    expect(input.controls().fire).toBe(false);
   });
 
   it('releaseAll отпускает клавиши и кнопку мыши', () => {

@@ -1,8 +1,10 @@
 import {
+  BULLET_IMPACT_RADIUS,
   EXPLOSION_DURATION,
   EXPLOSION_RADIUS,
   FIELD_RADIUS,
   METEOR_EXPLOSION_SCALE,
+  METEOR_HIT_EXPLOSION_SCALE,
   FIELD_RETURN_STIFFNESS,
   SHIP_COLLISION_RADIUS,
   SHIP_RESPAWN_DELAY,
@@ -14,14 +16,22 @@ import {
 import type { Controls } from '../core/input';
 import type { Random } from '../core/random';
 import { Vec2 } from '../core/Vec2';
+import type { Bullet } from '../entities/bullet';
 import type { Meteor } from '../entities/meteor';
 import { Planet } from '../entities/planet';
 import { Ship } from '../entities/ship';
 import { boundaryAcceleration } from '../physics/boundary';
-import { circlesOverlap } from '../physics/collision';
+import { circlesOverlap, segmentHitsCircle } from '../physics/collision';
 import { circularSpeed } from '../physics/gravity';
 import { type Trajectory, predictTrajectory } from '../physics/trajectory';
+import {
+  DEFAULT_FRAGMENT_PARAMS,
+  type FragmentParams,
+  keepFragments,
+  splitMeteor,
+} from './fragmentation';
 import { DEFAULT_METEOR_PARAMS, type MeteorSpawnParams, spawnMeteor } from './meteorSpawner';
+import { Cannon, type Weapon } from './weapon';
 
 // Взрыв на месте разбившегося корабля или метеорита; age растёт от 0 до
 // EXPLOSION_DURATION, radius — до какого размера расходится кольцо
@@ -38,6 +48,7 @@ export interface WorldParams {
   readonly startOrbitRadius: number;
   readonly respawnDelay: number;
   readonly meteors: MeteorSpawnParams;
+  readonly fragments: FragmentParams;
 }
 
 export const DEFAULT_WORLD_PARAMS: WorldParams = {
@@ -46,6 +57,7 @@ export const DEFAULT_WORLD_PARAMS: WorldParams = {
   startOrbitRadius: SHIP_START_ORBIT_RADIUS,
   respawnDelay: SHIP_RESPAWN_DELAY,
   meteors: DEFAULT_METEOR_PARAMS,
+  fragments: DEFAULT_FRAGMENT_PARAMS,
 };
 
 // Счётчики событий для оверлея (позже из них вырастут очки)
@@ -57,13 +69,18 @@ export interface WorldStats {
   meteorsEscaped: number;
   // Сколько раз корабль разбился о метеорит (входит в crashes)
   shipHitsByMeteor: number;
+  // Стрельба: выстрелы, попадания в метеориты, осколки, оставшиеся в игре,
+  // и сколько мелочи рассыпалось в пыль
+  shotsFired: number;
+  meteorsShot: number;
+  fragmentsCreated: number;
+  fragmentsDusted: number;
 }
 
 // Состояние мира: планета, корабль, метеориты и эффекты
 export interface World {
   time: number;
   ticks: number;
-  shotsFired: number;
   aimWorld: Vec2;
   controls: Controls;
   readonly params: WorldParams;
@@ -79,6 +96,9 @@ export interface World {
   readonly random: Random;
   readonly stats: WorldStats;
   explosions: Explosion[];
+  // Оружие корабля и снаряды в полёте
+  weapon: Weapon;
+  bullets: Bullet[];
 }
 
 export function createWorld(
@@ -89,7 +109,6 @@ export function createWorld(
   return {
     time: 0,
     ticks: 0,
-    shotsFired: 0,
     aimWorld: Vec2.ZERO,
     controls: { turn: 0, thrust: false, fire: false, aimScreen: Vec2.ZERO },
     params,
@@ -105,8 +124,14 @@ export function createWorld(
       meteorImpacts: 0,
       meteorsEscaped: 0,
       shipHitsByMeteor: 0,
+      shotsFired: 0,
+      meteorsShot: 0,
+      fragmentsCreated: 0,
+      fragmentsDusted: 0,
     },
     explosions: [],
+    weapon: new Cannon(),
+    bullets: [],
   };
 }
 
@@ -183,6 +208,53 @@ function stepMeteors(world: World, dt: number): void {
   });
 }
 
+// Двигаем снаряды и убираем истёкшие, вылетевшие за поле и попавшие в
+// планету. Как и метеориты, снаряды чувствуют только гравитацию планеты
+function stepBullets(world: World, dt: number): void {
+  const { planet, params } = world;
+  world.bullets = world.bullets.filter((b) => {
+    b.step(dt, planet.accelerationAt(b.position));
+    if (hitsPlanet(world, b.position, b.radius)) {
+      world.explosions.push({ position: b.position, radius: BULLET_IMPACT_RADIUS, age: 0 });
+      return false;
+    }
+    if (b.expired) return false;
+    return b.position.distanceTo(planet.position) <= params.fieldRadius + b.radius;
+  });
+}
+
+// Попадания снарядов в метеориты: метеорит раскалывается, снаряд исчезает.
+// Каждый снаряд разбивает не больше одного метеорита за шаг
+function resolveBulletHits(world: World): void {
+  const survivors: Bullet[] = [];
+  for (const bullet of world.bullets) {
+    const target = world.meteors.find((m) =>
+      segmentHitsCircle(
+        bullet.previousPosition,
+        bullet.position,
+        m.position,
+        m.radius + bullet.radius,
+      ),
+    );
+    if (target === undefined) {
+      survivors.push(bullet);
+      continue;
+    }
+    world.explosions.push({
+      position: target.position,
+      radius: target.radius * METEOR_HIT_EXPLOSION_SCALE,
+      age: 0,
+    });
+    const fragments = splitMeteor(target, world.random, world.params.fragments);
+    const kept = keepFragments(fragments, world.params.fragments.minMass);
+    world.meteors = world.meteors.filter((m) => m !== target).concat(kept);
+    world.stats.meteorsShot += 1;
+    world.stats.fragmentsCreated += kept.length;
+    world.stats.fragmentsDusted += fragments.length - kept.length;
+  }
+  world.bullets = survivors;
+}
+
 // Первый метеорит, задевший корабль, или undefined
 function meteorHittingShip(world: World, ship: Ship): Meteor | undefined {
   return world.meteors.find((m) =>
@@ -202,6 +274,9 @@ export function stepWorld(world: World, controls: Controls, aimWorld: Vec2, dt: 
 
   spawnMeteors(world, dt);
   stepMeteors(world, dt);
+  stepBullets(world, dt);
+  resolveBulletHits(world);
+  world.weapon.tick(dt);
 
   const ship = world.ship;
   if (ship === null) {
@@ -213,6 +288,13 @@ export function stepWorld(world: World, controls: Controls, aimWorld: Vec2, dt: 
   }
 
   ship.step(controls, dt, environmentAcceleration(world, ship.position));
+  if (controls.fire) {
+    const shots = world.weapon.fire(ship, aimWorld);
+    // `...shots` раскладывает массив на отдельные аргументы:
+    // push(...shots) — то же, что bullets.extend(shots) в Python
+    world.bullets.push(...shots);
+    world.stats.shotsFired += shots.length;
+  }
   if (hitsPlanet(world, ship.position)) {
     destroyShip(world, ship);
     return;

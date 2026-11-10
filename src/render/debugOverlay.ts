@@ -1,4 +1,5 @@
-import { CROSSHAIR_COLOR, CROSSHAIR_FIRE_COLOR, DEBUG_TEXT_COLOR } from '../config';
+import { DEBUG_TEXT_COLOR } from '../config';
+import { readiness } from '../game/weapon';
 import type { World } from '../game/world';
 import type { Vec2 } from '../core/Vec2';
 import { orbitInfo, specificEnergy } from '../physics/gravity';
@@ -58,21 +59,38 @@ function meteorLines(world: World): string[] {
   ];
 }
 
+// Строки про оружие и стрельбу
+function weaponLines(world: World): string[] {
+  const { weapon, stats } = world;
+  const ready = readiness(weapon);
+  const state = ready >= 1 ? 'готова' : `перезарядка ${(weapon.reloadLeft * 1000).toFixed(0)} мс`;
+  return [
+    `Оружие: ${weapon.name}, ${state}, снарядов в полёте: ${world.bullets.length}`,
+    `Выстрелов: ${stats.shotsFired}, попаданий: ${stats.meteorsShot}, осколков: ${stats.fragmentsCreated}, в пыль: ${stats.fragmentsDusted}`,
+  ];
+}
+
 // Текстовый оверлей в левом верхнем углу
 export function drawDebugOverlay(ctx: CanvasRenderingContext2D, info: DebugInfo): void {
   const { world } = info;
-  const objects = 1 + (world.ship ? 1 : 0) + world.meteors.length + world.explosions.length;
+  const objects =
+    1 +
+    (world.ship ? 1 : 0) +
+    world.meteors.length +
+    world.bullets.length +
+    world.explosions.length;
   const lines = [
     `FPS: ${info.fps.toFixed(0)}`,
-    `Объектов: ${objects} (планета, корабль, метеориты, взрывы)`,
+    `Объектов: ${objects} (планета, корабль, метеориты, снаряды, взрывы)`,
     `Время симуляции: ${world.time.toFixed(2)} с, шагов физики: ${world.ticks}`,
     `Клавиши: ${info.keysDown.length > 0 ? info.keysDown.join(' ') : '—'}`,
     `Поворот: ${TURN_LABEL[world.controls.turn]}`,
     `Тяга (W): ${world.controls.thrust ? 'ВКЛ' : 'выкл'}`,
-    `ЛКМ: ${world.controls.fire ? 'зажата' : 'отпущена'}, выстрелов: ${world.shotsFired}`,
+    `ЛКМ: ${world.controls.fire ? 'огонь' : 'отпущена'}`,
     ...shipLines(world),
     `Разбито кораблей: ${world.stats.crashes}`,
     ...meteorLines(world),
+    ...weaponLines(world),
     `Курсор: экран ${info.mouseScreen.toString()}, мир ${world.aimWorld.toString()}`,
     'F1 — скрыть/показать',
   ];
@@ -83,20 +101,5 @@ export function drawDebugOverlay(ctx: CanvasRenderingContext2D, info: DebugInfo)
   ctx.fillStyle = DEBUG_TEXT_COLOR;
   // Сдвигаем вниз, чтобы не налезать на предупреждения по центру сверху
   lines.forEach((line, i) => ctx.fillText(line, 12, 44 + i * 18));
-  ctx.restore();
-}
-
-// Временное перекрестие на месте курсора, чтобы было видно прицел
-export function drawCrosshair(ctx: CanvasRenderingContext2D, at: Vec2, firing: boolean): void {
-  const r = 8;
-  ctx.save();
-  ctx.strokeStyle = firing ? CROSSHAIR_FIRE_COLOR : CROSSHAIR_COLOR;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(at.x - r, at.y);
-  ctx.lineTo(at.x + r, at.y);
-  ctx.moveTo(at.x, at.y - r);
-  ctx.lineTo(at.x, at.y + r);
-  ctx.stroke();
   ctx.restore();
 }

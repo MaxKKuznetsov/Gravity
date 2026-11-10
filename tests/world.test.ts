@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Controls } from '../src/core/input';
 import { seededRandom } from '../src/core/random';
 import { Vec2 } from '../src/core/Vec2';
+import { Bullet } from '../src/entities/bullet';
 import { Meteor } from '../src/entities/meteor';
 import { Planet } from '../src/entities/planet';
 import { circularSpeed } from '../src/physics/gravity';
+import { DEFAULT_FRAGMENT_PARAMS, totalMass } from '../src/game/fragmentation';
 import { DEFAULT_METEOR_PARAMS } from '../src/game/meteorSpawner';
 import {
   type WorldParams,
@@ -23,6 +25,7 @@ const params: WorldParams = {
   respawnDelay: 1,
   // Метеоритов нет, чтобы случайно не сбили корабль; их проверяют отдельно
   meteors: { ...DEFAULT_METEOR_PARAMS, maxCount: 0 },
+  fragments: DEFAULT_FRAGMENT_PARAMS,
 };
 
 function run(world: ReturnType<typeof createWorld>, seconds: number): void {
@@ -178,5 +181,108 @@ describe('Метеориты в мире', () => {
     world.meteors.push(new Meteor(new Vec2(300, 0), new Vec2(0, 100), 1));
     stepWorld(world, idle, Vec2.ZERO, DT);
     expect(world.meteors[0]?.position.y).toBeGreaterThan(0);
+  });
+});
+
+describe('Стрельба в мире', () => {
+  const planet = () => new Planet(Vec2.ZERO, 60, 5_000_000);
+  const fire: Controls = { ...idle, fire: true };
+
+  it('при зажатой ЛКМ пушка стреляет с перезарядкой', () => {
+    const world = createWorld(planet(), params);
+    const aim = new Vec2(0, -1000);
+    // Полсекунды огня: при перезарядке 0,2 с это 3 выстрела (0; 0,2; 0,4)
+    const steps = Math.round(0.5 / DT);
+    for (let i = 0; i < steps; i++) stepWorld(world, fire, aim, DT);
+    expect(world.stats.shotsFired).toBe(3);
+    expect(world.bullets).toHaveLength(3);
+  });
+
+  it('снаряд наследует скорость корабля', () => {
+    const world = createWorld(planet(), params);
+    const ship = world.ship;
+    if (!ship) throw new Error('нет корабля');
+    // Корабль летит вправо, стреляем вверх. Прицел очень далеко: за шаг
+    // корабль сдвигается, и близкий прицел оказался бы не строго сверху
+    stepWorld(world, fire, ship.position.add(new Vec2(0, -1e9)), DT);
+    const bullet = world.bullets[0];
+    expect(bullet).toBeDefined();
+    expect(bullet?.velocity.x).toBeCloseTo(ship.velocity.x, 6);
+    expect(bullet?.velocity.y).toBeLessThan(-300);
+  });
+
+  it('снаряд падает на планету и исчезает со вспышкой', () => {
+    const world = createWorld(planet(), params);
+    world.ship = null;
+    world.respawnTimer = 100;
+    world.bullets.push(new Bullet(new Vec2(0, -200), new Vec2(0, 300)));
+    run(world, 1);
+    expect(world.bullets).toHaveLength(0);
+    expect(world.explosions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('снаряд исчезает, когда истекло время жизни', () => {
+    const world = createWorld(planet(), params);
+    world.ship = null;
+    world.respawnTimer = 100;
+    // Круговая орбита: ни в планету, ни за край снаряд не попадёт
+    const v = circularSpeed(5_000_000, 300);
+    world.bullets.push(new Bullet(new Vec2(300, 0), new Vec2(0, v), 0.5));
+    run(world, 0.4);
+    expect(world.bullets).toHaveLength(1);
+    run(world, 0.2);
+    expect(world.bullets).toHaveLength(0);
+  });
+
+  it('снаряд, вылетевший за край поля, исчезает', () => {
+    const world = createWorld(planet(), { ...params, fieldRadius: 400 });
+    world.ship = null;
+    world.respawnTimer = 100;
+    world.bullets.push(new Bullet(new Vec2(390, 0), new Vec2(600, 0)));
+    run(world, 0.2);
+    expect(world.bullets).toHaveLength(0);
+  });
+
+  it('попадание раскалывает метеорит: масса и импульс сохраняются', () => {
+    const world = createWorld(planet(), params, seededRandom(7));
+    world.ship = null;
+    world.respawnTimer = 100;
+    const meteor = new Meteor(new Vec2(300, 0), new Vec2(0, 50), 9);
+    world.meteors.push(meteor);
+    world.bullets.push(new Bullet(new Vec2(250, 0), new Vec2(600, 0)));
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    // За один шаг снаряд ещё не долетел
+    expect(world.meteors).toEqual([meteor]);
+    run(world, 0.1);
+    expect(world.stats.meteorsShot).toBe(1);
+    expect(world.bullets).toHaveLength(0);
+    expect(world.meteors.length).toBeGreaterThanOrEqual(2);
+    expect(world.meteors).not.toContain(meteor);
+    // Масса 9 делится на 2–3 части, каждая ≥ 1, так что пыли нет
+    expect(totalMass(world.meteors)).toBeCloseTo(9, 9);
+    expect(world.stats.fragmentsCreated).toBe(world.meteors.length);
+  });
+
+  it('мелкий метеорит от попадания рассыпается в пыль', () => {
+    const world = createWorld(planet(), params, seededRandom(3));
+    world.ship = null;
+    world.respawnTimer = 100;
+    world.meteors.push(new Meteor(new Vec2(300, 0), Vec2.ZERO, 1.2));
+    world.bullets.push(new Bullet(new Vec2(280, 0), new Vec2(600, 0)));
+    run(world, 0.1);
+    expect(world.meteors).toHaveLength(0);
+    expect(world.stats.meteorsShot).toBe(1);
+    expect(world.stats.fragmentsDusted).toBeGreaterThanOrEqual(2);
+  });
+
+  it('быстрый снаряд не проскакивает сквозь маленький метеорит', () => {
+    const world = createWorld(planet(), params, seededRandom(1));
+    world.ship = null;
+    world.respawnTimer = 100;
+    world.meteors.push(new Meteor(new Vec2(300, 0), Vec2.ZERO, 1));
+    // 6000 пикс/с — за шаг 50 пикс, больше диаметра метеорита (12)
+    world.bullets.push(new Bullet(new Vec2(270, 0), new Vec2(6000, 0)));
+    run(world, 0.05);
+    expect(world.stats.meteorsShot).toBe(1);
   });
 });
