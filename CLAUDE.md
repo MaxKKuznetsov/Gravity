@@ -40,12 +40,17 @@ Python, а TypeScript изучает по ходу проекта.
 
 ## Команды
 
+Нужна Node 24 (`.nvmrc`). Версия nvm по умолчанию на машине — 20, она
+проекту не подходит, поэтому перед командами npm делать
+`source ~/.nvm/nvm.sh && nvm use`.
+
 ```bash
 npm run dev      # dev-сервер с автоперезагрузкой
 npm run build    # production-сборка в dist/
 npm run preview  # посмотреть сборку локально
 npm test         # тесты Vitest
-npm run check    # tsc --noEmit + eslint + vitest run
+npm run check    # tsc --noEmit + eslint + prettier --check + vitest run
+npm run format   # отформатировать код Prettier
 ```
 
 ## Структура (целевая)
