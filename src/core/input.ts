@@ -18,7 +18,6 @@ export const KEY_TURN_LEFT = 'KeyA';
 export const KEY_TURN_RIGHT = 'KeyD';
 export const KEY_THRUST = 'KeyW';
 export const KEY_DEBUG = 'F1';
-export const KEY_RESET = 'KeyR';
 
 // Состояние клавиатуры и мыши. Сам класс про DOM не знает, поэтому его
 // можно тестировать в Node; к событиям браузера его подключает attachInput.
