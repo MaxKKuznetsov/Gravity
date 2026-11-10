@@ -1,11 +1,13 @@
 import { BACKGROUND_COLOR } from './config';
 import { computeCanvasSize } from './core/canvasSize';
 import { FpsMeter } from './core/fpsMeter';
-import { InputState, KEY_DEBUG, attachInput } from './core/input';
+import { InputState, KEY_DEBUG, KEY_RESET, attachInput } from './core/input';
 import { startLoop } from './core/loop';
+import { Ship } from './entities/ship';
 import { createWorld, stepWorld } from './game/world';
 import { Camera } from './render/camera';
 import { drawCrosshair, drawDebugOverlay } from './render/debugOverlay';
+import { drawOffscreenMarker, drawShip } from './render/shipRenderer';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) {
@@ -48,11 +50,16 @@ startLoop({
     // Одноразовые события обрабатываем раз за кадр, чтобы клик не потерялся
     // в кадре, где не было ни одного шага физики
     if (input.wasPressed(KEY_DEBUG)) debugVisible = !debugVisible;
+    // Пока у поля нет границы (она появится на этапе 3), улетевший корабль
+    // можно вернуть в центр клавишей R
+    if (input.wasPressed(KEY_RESET)) world.ship = new Ship();
     world.shotsFired += input.clickCount;
     input.endFrame();
 
     ctx.fillStyle = BACKGROUND_COLOR;
     ctx.fillRect(0, 0, camera.viewWidth, camera.viewHeight);
+    drawShip(ctx, world.ship, camera, world.time);
+    drawOffscreenMarker(ctx, world.ship, camera);
     drawCrosshair(ctx, input.mouseScreen, input.isMouseDown);
     if (debugVisible) {
       drawDebugOverlay(ctx, {
