@@ -1,16 +1,15 @@
 import type { Controls } from '../core/input';
 import { Vec2 } from '../core/Vec2';
+import { Ship } from '../entities/ship';
 
-// Состояние мира. На этапе 1 объектов ещё нет, есть только счётчики,
-// чтобы видеть, что физика тикает и команды доходят.
+// Состояние мира: пока в нём только корабль
 export interface World {
   time: number;
   ticks: number;
   shotsFired: number;
   aimWorld: Vec2;
   controls: Controls;
-  // Список объектов появится на этапе 2 (корабль) и дальше
-  objectCount: number;
+  ship: Ship;
 }
 
 export function createWorld(): World {
@@ -20,7 +19,7 @@ export function createWorld(): World {
     shotsFired: 0,
     aimWorld: Vec2.ZERO,
     controls: { turn: 0, thrust: false, fire: false, aimScreen: Vec2.ZERO },
-    objectCount: 0,
+    ship: new Ship(),
   };
 }
 
@@ -30,4 +29,5 @@ export function stepWorld(world: World, controls: Controls, aimWorld: Vec2, dt: 
   world.ticks += 1;
   world.controls = controls;
   world.aimWorld = aimWorld;
+  world.ship.step(controls, dt);
 }

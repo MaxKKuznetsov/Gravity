@@ -11,19 +11,26 @@ export interface DebugInfo {
 
 const TURN_LABEL = { [-1]: 'влево (A)', 0: '—', 1: 'вправо (D)' } as const;
 
+// Угол в градусах для показа; 0° — вправо, -90° — вверх
+function toDegrees(angle: number): string {
+  return ((angle * 180) / Math.PI).toFixed(0);
+}
+
 // Текстовый оверлей в левом верхнем углу
 export function drawDebugOverlay(ctx: CanvasRenderingContext2D, info: DebugInfo): void {
   const { world } = info;
   const lines = [
     `FPS: ${info.fps.toFixed(0)}`,
-    `Объектов: ${world.objectCount}`,
+    // Пока в мире только корабль; метеориты и снаряды появятся на этапах 4–5
+    'Объектов: 1',
     `Время симуляции: ${world.time.toFixed(2)} с, шагов физики: ${world.ticks}`,
     `Клавиши: ${info.keysDown.length > 0 ? info.keysDown.join(' ') : '—'}`,
     `Поворот: ${TURN_LABEL[world.controls.turn]}`,
     `Тяга (W): ${world.controls.thrust ? 'ВКЛ' : 'выкл'}`,
     `ЛКМ: ${world.controls.fire ? 'зажата' : 'отпущена'}, выстрелов: ${world.shotsFired}`,
+    `Корабль: ${world.ship.position.toString()}, скорость ${world.ship.speed.toFixed(0)} пикс/с, курс ${toDegrees(world.ship.angle)}°`,
     `Курсор: экран ${info.mouseScreen.toString()}, мир ${world.aimWorld.toString()}`,
-    'F1 — скрыть/показать',
+    'R — вернуть корабль в центр, F1 — скрыть/показать',
   ];
 
   ctx.save();
