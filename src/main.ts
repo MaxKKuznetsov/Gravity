@@ -1,13 +1,21 @@
 import { BACKGROUND_COLOR } from './config';
 import { computeCanvasSize } from './core/canvasSize';
 import { FpsMeter } from './core/fpsMeter';
-import { InputState, KEY_DEBUG, KEY_RESET, attachInput } from './core/input';
+import { InputState, KEY_DEBUG, attachInput } from './core/input';
 import { startLoop } from './core/loop';
-import { Ship } from './entities/ship';
-import { createWorld, stepWorld } from './game/world';
+import { createWorld, predictShipTrajectory, stepWorld } from './game/world';
+import { isOutsideField } from './physics/boundary';
 import { Camera } from './render/camera';
 import { drawCrosshair, drawDebugOverlay } from './render/debugOverlay';
 import { drawOffscreenMarker, drawShip } from './render/shipRenderer';
+import {
+  drawExplosion,
+  drawFieldBorder,
+  drawFieldWarning,
+  drawPlanet,
+  drawRespawnNotice,
+  drawTrajectory,
+} from './render/worldRenderer';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) {
@@ -50,16 +58,27 @@ startLoop({
     // Одноразовые события обрабатываем раз за кадр, чтобы клик не потерялся
     // в кадре, где не было ни одного шага физики
     if (input.wasPressed(KEY_DEBUG)) debugVisible = !debugVisible;
-    // Пока у поля нет границы (она появится на этапе 3), улетевший корабль
-    // можно вернуть в центр клавишей R
-    if (input.wasPressed(KEY_RESET)) world.ship = new Ship();
     world.shotsFired += input.clickCount;
     input.endFrame();
 
     ctx.fillStyle = BACKGROUND_COLOR;
     ctx.fillRect(0, 0, camera.viewWidth, camera.viewHeight);
-    drawShip(ctx, world.ship, camera, world.time);
-    drawOffscreenMarker(ctx, world.ship, camera);
+    drawFieldBorder(ctx, world.planet, world.params.fieldRadius, camera);
+    const trajectory = predictShipTrajectory(world);
+    if (trajectory) drawTrajectory(ctx, trajectory, camera);
+    drawPlanet(ctx, world.planet, camera);
+    for (const explosion of world.explosions) drawExplosion(ctx, explosion, camera);
+
+    const ship = world.ship;
+    if (ship) {
+      drawShip(ctx, ship, camera, world.time);
+      drawOffscreenMarker(ctx, ship, camera);
+      if (isOutsideField(ship.position, world.planet.position, world.params.fieldRadius)) {
+        drawFieldWarning(ctx, camera, world.time);
+      }
+    } else {
+      drawRespawnNotice(ctx, camera, world.respawnTimer);
+    }
     drawCrosshair(ctx, input.mouseScreen, input.isMouseDown);
     if (debugVisible) {
       drawDebugOverlay(ctx, {
