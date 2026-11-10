@@ -79,7 +79,7 @@ export const EXPLOSION_COLOR = '#ffb347';
 
 // Метеориты
 // Сколько метеоритов одновременно в поле и как часто появляется новый, с
-export const METEOR_MAX_COUNT = 8;
+export const METEOR_MAX_COUNT = 2;
 export const METEOR_SPAWN_INTERVAL = 1.5;
 // Первый метеорит появляется через столько секунд после старта
 export const METEOR_FIRST_SPAWN_DELAY = 1;
