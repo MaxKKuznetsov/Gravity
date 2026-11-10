@@ -1,7 +1,6 @@
 import {
   EXPLOSION_COLOR,
   EXPLOSION_DURATION,
-  EXPLOSION_RADIUS,
   FIELD_BORDER_COLOR,
   FIELD_WARNING_COLOR,
   PLANET_COLOR,
@@ -108,7 +107,7 @@ export function drawExplosion(
   const t = Math.min(1, explosion.age / EXPLOSION_DURATION);
   const at = camera.worldToScreen(explosion.position);
   // Кольцо быстро растёт в начале и замедляется к концу
-  const radius = EXPLOSION_RADIUS * (1 - (1 - t) * (1 - t));
+  const radius = explosion.radius * (1 - (1 - t) * (1 - t));
 
   ctx.save();
   ctx.globalAlpha = 1 - t;

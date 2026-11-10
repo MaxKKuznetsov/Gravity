@@ -1,7 +1,7 @@
 import { CROSSHAIR_COLOR, CROSSHAIR_FIRE_COLOR, DEBUG_TEXT_COLOR } from '../config';
 import type { World } from '../game/world';
 import type { Vec2 } from '../core/Vec2';
-import { orbitInfo } from '../physics/gravity';
+import { orbitInfo, specificEnergy } from '../physics/gravity';
 
 export interface DebugInfo {
   readonly fps: number;
@@ -46,20 +46,33 @@ function shipLines(world: World): string[] {
   ];
 }
 
+// Строки про метеориты: сколько летает по эллипсам (E < 0) и гиперболам
+function meteorLines(world: World): string[] {
+  const { planet, stats } = world;
+  const bound = world.meteors.filter(
+    (m) => specificEnergy(m.position, m.velocity, planet.position, planet.gm) < 0,
+  ).length;
+  return [
+    `Метеориты: ${world.meteors.length} (эллипсы ${bound}, гиперболы ${world.meteors.length - bound}), всего было ${stats.meteorsSpawned}`,
+    `Упало на планету: ${stats.meteorImpacts}, улетело за край: ${stats.meteorsEscaped}, сбили корабль: ${stats.shipHitsByMeteor}`,
+  ];
+}
+
 // Текстовый оверлей в левом верхнем углу
 export function drawDebugOverlay(ctx: CanvasRenderingContext2D, info: DebugInfo): void {
   const { world } = info;
-  const objects = 1 + (world.ship ? 1 : 0) + world.explosions.length;
+  const objects = 1 + (world.ship ? 1 : 0) + world.meteors.length + world.explosions.length;
   const lines = [
     `FPS: ${info.fps.toFixed(0)}`,
-    `Объектов: ${objects} (планета, корабль, взрывы)`,
+    `Объектов: ${objects} (планета, корабль, метеориты, взрывы)`,
     `Время симуляции: ${world.time.toFixed(2)} с, шагов физики: ${world.ticks}`,
     `Клавиши: ${info.keysDown.length > 0 ? info.keysDown.join(' ') : '—'}`,
     `Поворот: ${TURN_LABEL[world.controls.turn]}`,
     `Тяга (W): ${world.controls.thrust ? 'ВКЛ' : 'выкл'}`,
     `ЛКМ: ${world.controls.fire ? 'зажата' : 'отпущена'}, выстрелов: ${world.shotsFired}`,
     ...shipLines(world),
-    `Разбито кораблей: ${world.crashes}`,
+    `Разбито кораблей: ${world.stats.crashes}`,
+    ...meteorLines(world),
     `Курсор: экран ${info.mouseScreen.toString()}, мир ${world.aimWorld.toString()}`,
     'F1 — скрыть/показать',
   ];

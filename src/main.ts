@@ -6,6 +6,7 @@ import { startLoop } from './core/loop';
 import { createWorld, predictShipTrajectory, stepWorld } from './game/world';
 import { isOutsideField } from './physics/boundary';
 import { Camera } from './render/camera';
+import { drawMeteor } from './render/meteorRenderer';
 import { drawCrosshair, drawDebugOverlay } from './render/debugOverlay';
 import { drawOffscreenMarker, drawShip } from './render/shipRenderer';
 import {
@@ -67,6 +68,7 @@ startLoop({
     const trajectory = predictShipTrajectory(world);
     if (trajectory) drawTrajectory(ctx, trajectory, camera);
     drawPlanet(ctx, world.planet, camera);
+    for (const meteor of world.meteors) drawMeteor(ctx, meteor, camera);
     for (const explosion of world.explosions) drawExplosion(ctx, explosion, camera);
 
     const ship = world.ship;
