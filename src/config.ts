@@ -76,3 +76,38 @@ export const TRAJECTORY_IMPACT_COLOR = '#ff6b4a';
 export const EXPLOSION_DURATION = 1.2;
 export const EXPLOSION_RADIUS = 48;
 export const EXPLOSION_COLOR = '#ffb347';
+
+// Метеориты
+// Сколько метеоритов одновременно в поле и как часто появляется новый, с
+export const METEOR_MAX_COUNT = 8;
+export const METEOR_SPAWN_INTERVAL = 1.5;
+// Первый метеорит появляется через столько секунд после старта
+export const METEOR_FIRST_SPAWN_DELAY = 1;
+// Доля метеоритов на эллиптических орбитах, остальные летят по гиперболам
+export const METEOR_ELLIPSE_FRACTION = 0.6;
+// Масса в условных единицах. Радиус r = k · √m: площадь круга пропорциональна
+// массе, как у плоских «блинов» одинаковой плотности
+export const METEOR_MIN_MASS = 1;
+export const METEOR_MAX_MASS = 9;
+export const METEOR_RADIUS_PER_SQRT_MASS = 6;
+// Эллипс: метеорит появляется в апоцентре на краю поля, перицентр выбирается
+// случайно в этих пределах (пикс от центра планеты). Меньше радиуса планеты —
+// такой метеорит в итоге упадёт на неё
+export const METEOR_ELLIPSE_MIN_PERIAPSIS = 40;
+export const METEOR_ELLIPSE_MAX_PERIAPSIS = 320;
+// Гипербола: скорость в долях второй космической на краю поля
+// (√(2GM/R) ≈ 158 пикс/с при R = 400) и отклонение направления от
+// «прямо на планету», рад. Чем больше отклонение, тем дальше пролёт
+export const METEOR_HYPERBOLA_MIN_SPEED_FACTOR = 1.05;
+export const METEOR_HYPERBOLA_MAX_SPEED_FACTOR = 1.5;
+export const METEOR_HYPERBOLA_MAX_AIM_OFFSET = 0.6;
+// Вращение спрайта, рад/с (в обе стороны)
+export const METEOR_MAX_SPIN = 1.5;
+// Форма: неровный многоугольник из стольких вершин, каждая на расстоянии
+// r · (1 ± ROUGHNESS) от центра
+export const METEOR_SHAPE_VERTICES = 9;
+export const METEOR_SHAPE_ROUGHNESS = 0.25;
+export const METEOR_COLOR = '#8a7f72';
+export const METEOR_EDGE_COLOR = '#c9bba8';
+// Взрыв метеорита о планету: радиус кольца в долях радиуса метеорита
+export const METEOR_EXPLOSION_SCALE = 2.2;
