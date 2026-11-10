@@ -3,11 +3,13 @@ import { computeCanvasSize } from './core/canvasSize';
 import { FpsMeter } from './core/fpsMeter';
 import { InputState, KEY_DEBUG, attachInput } from './core/input';
 import { startLoop } from './core/loop';
+import { readiness } from './game/weapon';
 import { createWorld, predictShipTrajectory, stepWorld } from './game/world';
 import { isOutsideField } from './physics/boundary';
 import { Camera } from './render/camera';
 import { drawMeteor } from './render/meteorRenderer';
-import { drawCrosshair, drawDebugOverlay } from './render/debugOverlay';
+import { drawDebugOverlay } from './render/debugOverlay';
+import { drawBullet, drawCrosshair } from './render/weaponRenderer';
 import { drawOffscreenMarker, drawShip } from './render/shipRenderer';
 import {
   drawExplosion,
@@ -52,14 +54,14 @@ startLoop({
   update(dt) {
     const controls = input.controls();
     stepWorld(world, controls, camera.screenToWorld(controls.aimScreen), dt);
+    input.consumeClicks();
   },
   render(frameTime) {
     fps.tick(frameTime);
 
-    // Одноразовые события обрабатываем раз за кадр, чтобы клик не потерялся
-    // в кадре, где не было ни одного шага физики
+    // Одноразовые нажатия клавиш обрабатываем раз за кадр, чтобы они не
+    // потерялись в кадре без шагов физики (клики сбрасывает update)
     if (input.wasPressed(KEY_DEBUG)) debugVisible = !debugVisible;
-    world.shotsFired += input.clickCount;
     input.endFrame();
 
     ctx.fillStyle = BACKGROUND_COLOR;
@@ -69,6 +71,7 @@ startLoop({
     if (trajectory) drawTrajectory(ctx, trajectory, camera);
     drawPlanet(ctx, world.planet, camera);
     for (const meteor of world.meteors) drawMeteor(ctx, meteor, camera);
+    for (const bullet of world.bullets) drawBullet(ctx, bullet, camera);
     for (const explosion of world.explosions) drawExplosion(ctx, explosion, camera);
 
     const ship = world.ship;
@@ -81,7 +84,7 @@ startLoop({
     } else {
       drawRespawnNotice(ctx, camera, world.respawnTimer);
     }
-    drawCrosshair(ctx, input.mouseScreen, input.isMouseDown);
+    drawCrosshair(ctx, input.mouseScreen, readiness(world.weapon), input.isMouseDown);
     if (debugVisible) {
       drawDebugOverlay(ctx, {
         fps: fps.fps,
