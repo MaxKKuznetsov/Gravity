@@ -6,12 +6,17 @@ import {
   METEOR_EXPLOSION_SCALE,
   METEOR_HIT_EXPLOSION_SCALE,
   FIELD_RETURN_STIFFNESS,
+  PLANET_MAX_HITS,
+  SCORE_PER_MASS,
   SHIP_COLLISION_RADIUS,
   SHIP_RESPAWN_DELAY,
   SHIP_START_ANGLE,
   SHIP_START_ORBIT_RADIUS,
+  STARTING_LIVES,
   TRAJECTORY_SECONDS,
   TRAJECTORY_STEP,
+  WAVE_BASE_QUOTA,
+  WAVE_QUOTA_GROWTH,
 } from '../config';
 import type { Controls } from '../core/input';
 import type { Random } from '../core/random';
@@ -31,7 +36,20 @@ import {
   splitMeteor,
 } from './fragmentation';
 import { DEFAULT_METEOR_PARAMS, type MeteorSpawnParams, spawnMeteor } from './meteorSpawner';
+import { planetDamageFromMass, scarRadiusFactor } from './planetDamage';
+import { meteorParamsForWave, waveSettings } from './waves';
 import { Cannon, type Weapon } from './weapon';
+
+// Причина проигрыша. Тип-объединение строк — как Literal[...] в Python
+export type DefeatCause = 'none' | 'ship' | 'planet';
+
+// Тёмное пятно на поверхности планеты после падения метеорита
+export interface PlanetScar {
+  // Угол направления удара от центра планеты, рад
+  readonly angle: number;
+  // Размер кляксы в долях радиуса планеты
+  readonly radiusFactor: number;
+}
 
 // Взрыв на месте разбившегося корабля или метеорита; age растёт от 0 до
 // EXPLOSION_DURATION, radius — до какого размера расходится кольцо
@@ -49,6 +67,12 @@ export interface WorldParams {
   readonly respawnDelay: number;
   readonly meteors: MeteorSpawnParams;
   readonly fragments: FragmentParams;
+  readonly startingLives: number;
+  readonly planetMaxHits: number;
+  readonly scorePerMass: number;
+  // 0 — бесконечный спавн как на этапах 4–5 (волны выключены)
+  readonly waveBaseQuota: number;
+  readonly waveQuotaGrowth: number;
 }
 
 export const DEFAULT_WORLD_PARAMS: WorldParams = {
@@ -58,6 +82,11 @@ export const DEFAULT_WORLD_PARAMS: WorldParams = {
   respawnDelay: SHIP_RESPAWN_DELAY,
   meteors: DEFAULT_METEOR_PARAMS,
   fragments: DEFAULT_FRAGMENT_PARAMS,
+  startingLives: STARTING_LIVES,
+  planetMaxHits: PLANET_MAX_HITS,
+  scorePerMass: SCORE_PER_MASS,
+  waveBaseQuota: WAVE_BASE_QUOTA,
+  waveQuotaGrowth: WAVE_QUOTA_GROWTH,
 };
 
 // Счётчики событий для оверлея (позже из них вырастут очки)
@@ -99,6 +128,18 @@ export interface World {
   // Оружие корабля и снаряды в полёте
   weapon: Weapon;
   bullets: Bullet[];
+  // Правила партии
+  lives: number;
+  planetHits: number;
+  score: number;
+  wave: number;
+  // Сколько метеоритов ещё нужно выпустить в этой волне (0 при выключенных волнах)
+  meteorsLeftToSpawn: number;
+  // Партия проиграна (корабль или планета)
+  defeated: boolean;
+  defeatCause: DefeatCause;
+  // Кляксы на поверхности от упавших метеоритов
+  planetScars: PlanetScar[];
 }
 
 export function createWorld(
@@ -106,7 +147,7 @@ export function createWorld(
   params: WorldParams = DEFAULT_WORLD_PARAMS,
   random: Random = Math.random,
 ): World {
-  return {
+  const world: World = {
     time: 0,
     ticks: 0,
     aimWorld: Vec2.ZERO,
@@ -132,7 +173,35 @@ export function createWorld(
     explosions: [],
     weapon: new Cannon(),
     bullets: [],
+    lives: params.startingLives,
+    planetHits: params.planetMaxHits,
+    score: 0,
+    wave: 1,
+    meteorsLeftToSpawn: 0,
+    defeated: false,
+    defeatCause: 'none',
+    planetScars: [],
   };
+  beginWave(world, 1);
+  return world;
+}
+
+// Запускает волну: квота появления и таймер до первого метеорита
+export function beginWave(world: World, wave: number): void {
+  world.wave = Math.max(1, Math.floor(wave));
+  if (world.params.waveBaseQuota <= 0) {
+    world.meteorsLeftToSpawn = 0;
+    return;
+  }
+  const settings = waveSettings(
+    world.wave,
+    world.params.meteors.maxCount,
+    world.params.meteors.spawnInterval,
+    world.params.waveBaseQuota,
+    world.params.waveQuotaGrowth,
+  );
+  world.meteorsLeftToSpawn = settings.spawnQuota;
+  world.meteorTimer = world.params.meteors.firstSpawnDelay;
 }
 
 // Новый корабль над планетой на круговой орбите радиуса orbitRadius,
@@ -160,12 +229,25 @@ function hitsPlanet(world: World, position: Vec2, radius = SHIP_COLLISION_RADIUS
   return circlesOverlap(position, radius, world.planet.position, world.planet.radius);
 }
 
-// Корабль взрывается; новый появится через respawnDelay
+// Корабль взрывается; жизнь тратится. Новый появится через respawnDelay,
+// если жизни ещё остались; иначе партия проиграна
 function destroyShip(world: World, ship: Ship): void {
   world.explosions.push({ position: ship.position, radius: EXPLOSION_RADIUS, age: 0 });
   world.ship = null;
-  world.respawnTimer = world.params.respawnDelay;
   world.stats.crashes += 1;
+  world.lives = Math.max(0, world.lives - 1);
+  if (world.lives > 0) {
+    world.respawnTimer = world.params.respawnDelay;
+  } else {
+    world.respawnTimer = 0;
+    markDefeated(world, 'ship');
+  }
+}
+
+function markDefeated(world: World, cause: Exclude<DefeatCause, 'none'>): void {
+  if (world.defeated) return;
+  world.defeated = true;
+  world.defeatCause = cause;
 }
 
 function explodeMeteor(world: World, meteor: Meteor): void {
@@ -176,15 +258,47 @@ function explodeMeteor(world: World, meteor: Meteor): void {
   });
 }
 
-// Раз в spawnInterval добавляем метеорит на краю поля, пока их меньше maxCount
+// Падение метеорита на планету: урон, шрам; при 0 хитов — проигрыш
+function impactMeteorOnPlanet(world: World, meteor: Meteor): void {
+  explodeMeteor(world, meteor);
+  world.stats.meteorImpacts += 1;
+  const offset = meteor.position.sub(world.planet.position);
+  const angle = offset.lengthSq() > 0 ? Math.atan2(offset.y, offset.x) : 0;
+  world.planetScars.push({
+    angle,
+    radiusFactor: scarRadiusFactor(meteor.mass),
+  });
+  const damage = planetDamageFromMass(meteor.mass);
+  world.planetHits = Math.max(0, world.planetHits - damage);
+  if (world.planetHits <= 0) markDefeated(world, 'planet');
+}
+
+// Раз в spawnInterval добавляем метеорит на краю поля, пока их меньше maxCount.
+// При включённых волнах не выпускаем больше квоты текущей волны
 function spawnMeteors(world: World, dt: number): void {
-  const { meteors: params, fieldRadius } = world.params;
+  const { fieldRadius, waveBaseQuota, waveQuotaGrowth } = world.params;
+  const params = meteorParamsForWave(
+    world.wave,
+    world.params.meteors,
+    waveBaseQuota,
+    waveQuotaGrowth,
+  );
   world.meteorTimer -= dt;
   if (world.meteorTimer > 0) return;
   world.meteorTimer += params.spawnInterval;
+  if (waveBaseQuota > 0 && world.meteorsLeftToSpawn <= 0) return;
   if (world.meteors.length >= params.maxCount) return;
   world.meteors.push(spawnMeteor(world.planet, fieldRadius, world.random, params));
   world.stats.meteorsSpawned += 1;
+  if (waveBaseQuota > 0) world.meteorsLeftToSpawn -= 1;
+}
+
+// Волна окончена: квота исчерпана и в поле никого не осталось
+function maybeAdvanceWave(world: World): void {
+  if (world.params.waveBaseQuota <= 0) return;
+  if (world.meteorsLeftToSpawn > 0) return;
+  if (world.meteors.length > 0) return;
+  beginWave(world, world.wave + 1);
 }
 
 // Двигаем метеориты и убираем тех, кто упал на планету или вылетел за поле.
@@ -195,8 +309,7 @@ function stepMeteors(world: World, dt: number): void {
   world.meteors = world.meteors.filter((m) => {
     m.step(dt, planet.accelerationAt(m.position));
     if (hitsPlanet(world, m.position, m.radius)) {
-      explodeMeteor(world, m);
-      world.stats.meteorImpacts += 1;
+      impactMeteorOnPlanet(world, m);
       return false;
     }
     // Исчезает, когда целиком ушёл за край (центр дальше R + радиус)
@@ -245,6 +358,8 @@ function resolveBulletHits(world: World): void {
       radius: target.radius * METEOR_HIT_EXPLOSION_SCALE,
       age: 0,
     });
+    // Очки за массу сбитого метеорита (осколки дадут очки при следующих попаданиях)
+    world.score += Math.round(target.mass * world.params.scorePerMass);
     const fragments = splitMeteor(target, world.random, world.params.fragments);
     const kept = keepFragments(fragments, world.params.fragments.minMass);
     world.meteors = world.meteors.filter((m) => m !== target).concat(kept);
@@ -276,13 +391,16 @@ export function stepWorld(world: World, controls: Controls, aimWorld: Vec2, dt: 
   stepMeteors(world, dt);
   stepBullets(world, dt);
   resolveBulletHits(world);
+  maybeAdvanceWave(world);
   world.weapon.tick(dt);
 
   const ship = world.ship;
   if (ship === null) {
-    world.respawnTimer -= dt;
-    if (world.respawnTimer <= 0) {
-      world.ship = spawnShip(world.planet, world.params.startOrbitRadius);
+    if (!world.defeated) {
+      world.respawnTimer -= dt;
+      if (world.respawnTimer <= 0) {
+        world.ship = spawnShip(world.planet, world.params.startOrbitRadius);
+      }
     }
     return;
   }
