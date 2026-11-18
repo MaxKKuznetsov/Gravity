@@ -7,3 +7,6 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Локальные референсы текстур (не в репозитории)
+examples/
