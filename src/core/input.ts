@@ -18,6 +18,11 @@ export const KEY_TURN_LEFT = 'KeyA';
 export const KEY_TURN_RIGHT = 'KeyD';
 export const KEY_THRUST = 'KeyW';
 export const KEY_DEBUG = 'F1';
+export const KEY_PAUSE = 'KeyP';
+export const KEY_ESCAPE = 'Escape';
+export const KEY_CONFIRM = 'Enter';
+export const KEY_CONFIRM_ALT = 'Space';
+export const KEY_RESTART = 'KeyR';
 
 // Состояние клавиатуры и мыши. Сам класс про DOM не знает, поэтому его
 // можно тестировать в Node; к событиям браузера его подключает attachInput.
@@ -117,8 +122,8 @@ export class InputState {
 // Подписывает InputState на события браузера. Возвращает функцию отписки.
 export function attachInput(input: InputState, canvas: HTMLCanvasElement): () => void {
   const onKeyDown = (e: KeyboardEvent): void => {
-    // F1 в браузере открывает справку — забираем клавишу себе
-    if (e.code === KEY_DEBUG) e.preventDefault();
+    // F1 в браузере открывает справку, Space — прокрутку страницы
+    if (e.code === KEY_DEBUG || e.code === KEY_CONFIRM_ALT) e.preventDefault();
     input.keyDown(e.code);
   };
   const onKeyUp = (e: KeyboardEvent): void => input.keyUp(e.code);

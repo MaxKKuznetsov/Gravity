@@ -83,6 +83,7 @@ export function drawDebugOverlay(ctx: CanvasRenderingContext2D, info: DebugInfo)
     `FPS: ${info.fps.toFixed(0)}`,
     `Объектов: ${objects} (планета, корабль, метеориты, снаряды, взрывы)`,
     `Время симуляции: ${world.time.toFixed(2)} с, шагов физики: ${world.ticks}`,
+    `Партия: очки ${world.score}, жизни ${world.lives}, планета ${world.planetHits}/${world.params.planetMaxHits}, волна ${world.wave}`,
     `Клавиши: ${info.keysDown.length > 0 ? info.keysDown.join(' ') : '—'}`,
     `Поворот: ${TURN_LABEL[world.controls.turn]}`,
     `Тяга (W): ${world.controls.thrust ? 'ВКЛ' : 'выкл'}`,

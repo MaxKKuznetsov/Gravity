@@ -52,6 +52,12 @@ export const PLANET_RADIUS = 60;
 export const GRAVITY_MIN_RADIUS = PLANET_RADIUS;
 export const PLANET_COLOR = '#3f7fbf';
 export const PLANET_GLOW_COLOR = '#9cc8ff';
+// Шрам (клякса) на месте падения метеорита
+export const PLANET_SCAR_COLOR = 'rgba(18, 22, 32, 0.78)';
+export const PLANET_SCAR_EDGE_COLOR = 'rgba(8, 10, 16, 0.55)';
+// Трещины при разрушении планеты (референс: examples/crack/crack.jpeg)
+export const PLANET_CRACK_COLOR = '#e23b3b';
+export const PLANET_CRACK_GLOW_COLOR = 'rgba(255, 80, 60, 0.45)';
 
 // Граница поля для корабля: круг вокруг планеты. За ним действует
 // возвращающая «пружина» a = k · (r − R) к центру. Пока у камеры нет
@@ -144,3 +150,32 @@ export const METEOR_FRAGMENT_SPEED = 45;
 export const METEOR_FRAGMENT_MASS_SPREAD = 0.4;
 // Вспышка при попадании: радиус кольца в долях радиуса метеорита
 export const METEOR_HIT_EXPLOSION_SCALE = 1.4;
+
+// Правила игры (этап 6)
+// Сколько жизней в начале партии
+export const STARTING_LIVES = 3;
+// Запас прочности планеты: цель игрока — не дать метеоритам её разрушить
+export const PLANET_MAX_HITS = 25;
+// Размер метеорита по массе → урон планете при падении
+// малый ≤ SMALL_MAX, средний ≤ MEDIUM_MAX, иначе крупный
+export const METEOR_SMALL_MAX_MASS = 2;
+export const METEOR_MEDIUM_MAX_MASS = 5;
+export const PLANET_DAMAGE_SMALL = 1;
+export const PLANET_DAMAGE_MEDIUM = 2;
+export const PLANET_DAMAGE_LARGE = 3;
+// Очки за единицу массы сбитого метеорита (масса 9 → 900 очков)
+export const SCORE_PER_MASS = 100;
+// Сколько метеоритов выпускает первая волна; каждая следующая + GROWTH
+export const WAVE_BASE_QUOTA = 4;
+export const WAVE_QUOTA_GROWTH = 2;
+// Одновременно в поле: база из METEOR_MAX_COUNT, +1 за волну, не больше CAP
+export const WAVE_MAX_COUNT_CAP = 6;
+// Интервал появления: на каждой волне короче на STEP, но не ниже MIN
+export const WAVE_SPAWN_INTERVAL_STEP = 0.15;
+export const WAVE_SPAWN_INTERVAL_MIN = 0.55;
+// HUD и экраны
+export const HUD_COLOR = '#d8e2ff';
+export const HUD_MUTED_COLOR = 'rgba(216, 226, 255, 0.65)';
+export const OVERLAY_DIM_COLOR = 'rgba(5, 6, 10, 0.72)';
+export const OVERLAY_TITLE_COLOR = '#e0e6ff';
+export const OVERLAY_ACCENT_COLOR = '#9fe870';

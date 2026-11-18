@@ -26,6 +26,12 @@ const params: WorldParams = {
   // Метеоритов нет, чтобы случайно не сбили корабль; их проверяют отдельно
   meteors: { ...DEFAULT_METEOR_PARAMS, maxCount: 0 },
   fragments: DEFAULT_FRAGMENT_PARAMS,
+  startingLives: 3,
+  planetMaxHits: 25,
+  scorePerMass: 100,
+  // Волны выключены: спавн как на этапах 4–5 (здесь maxCount = 0)
+  waveBaseQuota: 0,
+  waveQuotaGrowth: 0,
 };
 
 function run(world: ReturnType<typeof createWorld>, seconds: number): void {
@@ -284,5 +290,81 @@ describe('Стрельба в мире', () => {
     world.bullets.push(new Bullet(new Vec2(270, 0), new Vec2(6000, 0)));
     run(world, 0.05);
     expect(world.stats.meteorsShot).toBe(1);
+  });
+
+  it('попадание даёт очки пропорционально массе', () => {
+    const world = createWorld(planet(), { ...params, scorePerMass: 100 }, seededRandom(1));
+    world.ship = null;
+    world.respawnTimer = 100;
+    world.meteors.push(new Meteor(new Vec2(300, 0), Vec2.ZERO, 4));
+    world.bullets.push(new Bullet(new Vec2(280, 0), new Vec2(600, 0)));
+    run(world, 0.1);
+    expect(world.stats.meteorsShot).toBe(1);
+    expect(world.score).toBe(400);
+  });
+});
+
+describe('Жизни и волны', () => {
+  const planet = () => new Planet(Vec2.ZERO, 60, 5_000_000);
+
+  it('столкновение тратит жизнь, при нуле корабль не возрождается', () => {
+    const world = createWorld(planet(), { ...params, startingLives: 1, respawnDelay: 0.5 });
+    expect(world.lives).toBe(1);
+    if (world.ship) {
+      world.ship.position = new Vec2(0, -69);
+      world.ship.velocity = Vec2.ZERO;
+    }
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    expect(world.lives).toBe(0);
+    expect(world.defeated).toBe(true);
+    expect(world.defeatCause).toBe('ship');
+    expect(world.ship).toBeNull();
+    run(world, 1);
+    expect(world.ship).toBeNull();
+  });
+
+  it('при оставшихся жизнях корабль появляется снова', () => {
+    const world = createWorld(planet(), { ...params, startingLives: 3, respawnDelay: 0.5 });
+    if (world.ship) {
+      world.ship.position = new Vec2(0, -69);
+      world.ship.velocity = Vec2.ZERO;
+    }
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    expect(world.lives).toBe(2);
+    expect(world.defeated).toBe(false);
+    run(world, 0.6);
+    expect(world.ship).not.toBeNull();
+  });
+
+  it('волна выпускает квоту и переходит к следующей', () => {
+    const world = createWorld(
+      planet(),
+      {
+        ...params,
+        fieldRadius: 400,
+        waveBaseQuota: 2,
+        waveQuotaGrowth: 1,
+        meteors: {
+          ...DEFAULT_METEOR_PARAMS,
+          maxCount: 2,
+          spawnInterval: 0.2,
+          firstSpawnDelay: 0,
+        },
+      },
+      seededRandom(2),
+    );
+    if (world.ship) world.ship.position = new Vec2(5000, 0);
+    expect(world.wave).toBe(1);
+    expect(world.meteorsLeftToSpawn).toBe(2);
+    run(world, 0.5);
+    expect(world.stats.meteorsSpawned).toBe(2);
+    expect(world.meteorsLeftToSpawn).toBe(0);
+    // Убираем метеоритов вручную — волна должна смениться
+    world.meteors = [];
+    stepWorld(world, idle, Vec2.ZERO, DT);
+    expect(world.wave).toBe(2);
+    expect(world.meteorsLeftToSpawn).toBe(3);
   });
 });

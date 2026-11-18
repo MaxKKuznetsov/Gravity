@@ -4,19 +4,36 @@ import {
   FIELD_BORDER_COLOR,
   FIELD_WARNING_COLOR,
   PLANET_COLOR,
+  PLANET_CRACK_COLOR,
+  PLANET_CRACK_GLOW_COLOR,
   PLANET_GLOW_COLOR,
+  PLANET_SCAR_COLOR,
+  PLANET_SCAR_EDGE_COLOR,
   TRAJECTORY_COLOR,
   TRAJECTORY_IMPACT_COLOR,
 } from '../config';
 import type { Planet } from '../entities/planet';
-import type { Explosion } from '../game/world';
+import type { Explosion, PlanetScar } from '../game/world';
 import type { Trajectory } from '../physics/trajectory';
 import type { Camera } from './camera';
 
-// Планета: шар с градиентом и слабым свечением вокруг
-export function drawPlanet(ctx: CanvasRenderingContext2D, planet: Planet, camera: Camera): void {
+export interface PlanetDrawOptions {
+  readonly scars?: readonly PlanetScar[];
+  // Хиты кончились — рисуем красные трещины (референс examples/crack)
+  readonly cracked?: boolean;
+}
+
+// Планета: шар с градиентом, кляксами от ударов и трещинами при разрушении
+export function drawPlanet(
+  ctx: CanvasRenderingContext2D,
+  planet: Planet,
+  camera: Camera,
+  options: PlanetDrawOptions = {},
+): void {
   const at = camera.worldToScreen(planet.position);
   const r = planet.radius;
+  const scars = options.scars ?? [];
+  const cracked = options.cracked ?? false;
 
   ctx.save();
   const glow = ctx.createRadialGradient(at.x, at.y, r * 0.9, at.x, at.y, r * 1.6);
@@ -35,7 +52,104 @@ export function drawPlanet(ctx: CanvasRenderingContext2D, planet: Planet, camera
   ctx.beginPath();
   ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
   ctx.fill();
+
+  // Кляксы и трещины только внутри диска планеты
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+  ctx.clip();
+  for (const scar of scars) drawScar(ctx, at.x, at.y, r, scar);
+  if (cracked) drawCracks(ctx, at.x, at.y, r, scars);
   ctx.restore();
+}
+
+// Тёмное пятно у поверхности в направлении удара
+function drawScar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  planetR: number,
+  scar: PlanetScar,
+): void {
+  const dist = planetR * 0.72;
+  const x = cx + Math.cos(scar.angle) * dist;
+  const y = cy + Math.sin(scar.angle) * dist;
+  const size = planetR * scar.radiusFactor;
+
+  ctx.fillStyle = PLANET_SCAR_COLOR;
+  ctx.beginPath();
+  // Неровная «клякса» из нескольких овалов
+  ctx.ellipse(x, y, size, size * 0.72, scar.angle, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(
+    x + Math.cos(scar.angle + 0.9) * size * 0.35,
+    y + Math.sin(scar.angle + 0.9) * size * 0.35,
+    size * 0.55,
+    size * 0.4,
+    scar.angle + 0.4,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.fillStyle = PLANET_SCAR_EDGE_COLOR;
+  ctx.beginPath();
+  ctx.ellipse(x, y, size * 0.45, size * 0.32, scar.angle - 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Красные трещины в стиле examples/crack/crack.jpeg: ломаные линии от шрамов
+function drawCracks(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  planetR: number,
+  scars: readonly PlanetScar[],
+): void {
+  const seeds = scars.length > 0 ? scars.map((s) => s.angle) : [0, 2.1, 4.0];
+
+  ctx.strokeStyle = PLANET_CRACK_GLOW_COLOR;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const angle of seeds) strokeCrackBranch(ctx, cx, cy, planetR, angle, 0);
+
+  ctx.strokeStyle = PLANET_CRACK_COLOR;
+  ctx.lineWidth = 1.6;
+  for (const angle of seeds) strokeCrackBranch(ctx, cx, cy, planetR, angle, 0);
+}
+
+function strokeCrackBranch(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  planetR: number,
+  angle: number,
+  depth: number,
+): void {
+  if (depth > 3) return;
+  // Детерминированный «шум» от угла, без Math.random — картинка стабильна
+  const jitter = Math.sin(angle * 12.9898 + depth * 78.233) * 0.55;
+  const steps = 5 - depth;
+  const length = planetR * (0.55 - depth * 0.1);
+  let x = cx + Math.cos(angle) * planetR * 0.15;
+  let y = cy + Math.sin(angle) * planetR * 0.15;
+  let heading = angle + Math.PI + jitter * 0.4;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 0; i < steps; i++) {
+    heading += Math.sin(angle * 7.1 + i * 1.7 + depth) * 0.45;
+    const stepLen = length / steps;
+    x += Math.cos(heading) * stepLen;
+    y += Math.sin(heading) * stepLen;
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  if (depth < 2) {
+    strokeCrackBranch(ctx, cx, cy, planetR, angle + 0.7 + jitter, depth + 1);
+    strokeCrackBranch(ctx, cx, cy, planetR, angle - 0.9 - jitter * 0.5, depth + 1);
+  }
 }
 
 // Граница поля: тонкий пунктирный круг
