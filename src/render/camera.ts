@@ -10,6 +10,12 @@ export class Camera {
     public viewHeight = 0,
   ) {}
 
+  zoom = 1;
+
+  setZoom(zoom: number): void {
+    this.zoom = Math.max(0.55, Math.min(1.8, zoom));
+  }
+
   setViewSize(width: number, height: number): void {
     this.viewWidth = width;
     this.viewHeight = height;
@@ -17,8 +23,8 @@ export class Camera {
 
   screenToWorld(screen: Vec2): Vec2 {
     return new Vec2(
-      screen.x - this.viewWidth / 2 + this.center.x,
-      screen.y - this.viewHeight / 2 + this.center.y,
+      (screen.x - this.viewWidth / 2) / this.zoom + this.center.x,
+      (screen.y - this.viewHeight / 2) / this.zoom + this.center.y,
     );
   }
 

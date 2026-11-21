@@ -3,7 +3,12 @@ import type { World } from '../game/world';
 import type { Camera } from './camera';
 
 // Игровой HUD: очки, жизни, хиты планеты, волна, скорость и высота
-export function drawHud(ctx: CanvasRenderingContext2D, world: World, camera: Camera): void {
+export function drawHud(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  camera: Camera,
+  highScore = 0,
+): void {
   const pad = 16;
   const line = 22;
   ctx.save();
@@ -14,8 +19,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, world: World, camera: Cam
   ctx.fillStyle = HUD_COLOR;
   ctx.fillText(`Очки  ${world.score}`, pad, pad);
   ctx.fillStyle = HUD_MUTED_COLOR;
-  ctx.fillText(`Волна ${world.wave}`, pad, pad + line);
-  ctx.fillText(shipStatus(world), pad, pad + line * 2);
+  ctx.fillText(`Рекорд ${Math.max(highScore, world.score)}`, pad, pad + line);
+  ctx.fillText(`Волна ${world.wave}`, pad, pad + line * 2);
+  ctx.fillText(shipStatus(world), pad, pad + line * 3);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = HUD_COLOR;
